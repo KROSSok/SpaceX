@@ -56,6 +56,7 @@ class SpaceXApp {
                 "4" -> {
                     println("Enter the mission name:")
                     val missionName = scanner.nextLine()
+                    //ajshd
                     try {
                         val payload = launchService.getMissionIdByName(missionName)
                             ?.let { launchService.getPayloadById(it) }
