@@ -10,7 +10,11 @@ data class Launch(
     @SerializedName("success") val success: String,
     @SerializedName("launchpad") val launch_site_name: String,
     @SerializedName("id") val id: String
-)
+) {
+    fun isSuccessLaunch(launch: Launch): Boolean {
+        return launch.success == "true"
+    }
+}
 
 data class SearchCriteria(
     val year: Int
@@ -51,5 +55,23 @@ data class RocketStats(
     val totalLaunches: Int,
     val successfulLaunches: Int,
     val failedLaunches: Int,
+) {
     val successRate: Int
-)
+        get() = if (totalLaunches != 0) {
+            ((successfulLaunches.toDouble().div(totalLaunches)) * 100).toInt()
+        } else {
+            0
+        }
+
+    override fun toString(): String {
+        return "Rocket Statistics for ${rocket.name}\n" +
+                "Stages: ${rocket.stages}\n" +
+                "Boosters: ${rocket.boosters}\n" +
+                "Mass: ${rocket.mass.kg} kg\n" +
+                "Payload to LEO: ${rocket.payload_weights[0].kg} kg\n" +
+                "Total Launches: ${totalLaunches}\n" +
+                "Successful Launches: ${successfulLaunches}\n" +
+                "Failed Launches: ${failedLaunches}\n" +
+                "Success Rate: ${successRate} %"
+    }
+}

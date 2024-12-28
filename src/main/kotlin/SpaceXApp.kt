@@ -23,23 +23,34 @@ class SpaceXApp {
             when (scanner.nextLine().trim()) {
                 "1" -> {
                     println("Enter year to search launches:")
-                    val year = SearchCriteria(scanner.nextLine().toInt())
-                    val launches = launchService.getLaunchesByYear(year.year)
+                    var year: Int? = null
+                    while (year == null) {
+                        val input = scanner.nextLine()
+                        year = try {
+                            input.toInt() // Attempt to convert input to an integer
+                        } catch (e: NumberFormatException) {
+                            // If the input is not a valid integer, handle the exception
+                            println("Invalid input. Please enter a valid year.")
+                            null // Set year to null so the loop continues
+                        }
+                    }
+                    val launches = launchService.getLaunchesByYear(SearchCriteria(year).year)
                     try {
-                        if (launches.isEmpty()) {
-                            println("No launches found for this year.")
-                        } else {
-                            launchService.printLaunch(launches)
-                            println("Enter the number to add to favorites, or 0 to skip:")
-                            val choice = scanner.nextLine().toInt()
-                            if (choice in 1..launches.size) {
-                                launchService.addToFavorites(launches[choice - 1])
+                        if (launches != null) {
+                            if (launches.isEmpty()) {
+                                println("No launches found for this year.")
+                            } else {
+                                launchService.printLaunch(launches)
+                                println("Enter the number to add to favorites, or 0 to skip:")
+                                val choice = scanner.nextLine().toInt()
+                                if (choice in 1..launches.size) {
+                                    launchService.addToFavorites(launches[choice - 1])
+                                }
                             }
                         }
                     } catch (e: Exception) {
                         println("Error fetching launches: ${e.message}")
                     }
-
                 }
 
                 "2" -> {
@@ -55,7 +66,15 @@ class SpaceXApp {
 
                 "4" -> {
                     println("Enter the mission name:")
-                    val missionName = scanner.nextLine()
+                    var missionName: String
+                    while (true) {
+                        missionName = scanner.nextLine()
+                        if (missionName.isNotEmpty()) {
+                            break // Exit the loop if the input is not empty
+                        } else {
+                            println("Mission name cannot be empty. Please enter a valid mission name:")
+                        }
+                    }
 
                     try {
                         val payload = launchService.getMissionIdByName(missionName)
@@ -71,9 +90,8 @@ class SpaceXApp {
                 "5" -> {
                     println("Enter the rocket name:")
                     val rocketName = scanner.nextLine()
-                    launchService.getRockets()
                     try {
-                        launchService.getRocketStats(rocketName).let { launchService.printRocketStatistic(it) }
+                        launchService.findRocketByName(rocketName)
                     } catch (e: Exception) {
                         println("${e.message}")
                     }
