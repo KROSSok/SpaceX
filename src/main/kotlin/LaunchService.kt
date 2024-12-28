@@ -46,7 +46,7 @@ class LaunchService {
         } else {
             val timestamp = DateTime.now().toString("yyyy-MM-dd HH:mm:ss")
             favorites.add(Favorite(launch, timestamp))
-            println("${launch.mission_name} added to favorites!")
+            println("${launch.missionName} added to favorites!")
         }
     }
 
@@ -56,7 +56,7 @@ class LaunchService {
             println("No favorites found.")
         } else {
             favorites.sortedBy { it.dateAdded }
-                .forEach { println("Mission: ${it.launch.mission_name} - Added on ${it.dateAdded}, id: ${it.launch.id}") }
+                .forEach { println("Mission: ${it.launch.missionName} - Added on ${it.dateAdded}, id: ${it.launch.id}") }
         }
     }
 
@@ -65,7 +65,7 @@ class LaunchService {
         val index = favorites.indexOfFirst { it.launch.id == launchId }
         if (index != -1) {
             val removed = favorites.removeAt(index)
-            println("${removed.launch.mission_name} removed from favorites!")
+            println("${removed.launch.missionName} removed from favorites!")
         } else {
             println("Launch not found in favorites.")
         }
@@ -75,7 +75,7 @@ class LaunchService {
 
         for (entry in searchCache.values) {
 
-            val launch = entry.find { it.mission_name.equals(missionMame, ignoreCase = true) }
+            val launch = entry.find { it.missionName.equals(missionMame, ignoreCase = true) }
             if (launch != null) {
                 return launch.id
             }
@@ -124,7 +124,7 @@ class LaunchService {
     private fun dateFilter(searchCriteria: SearchCriteria): List<Launch> {
         return searchCache.getValue(searchCriteria.year).filter {
             ZonedDateTime.parse(
-                it.date_utc,
+                it.dateUtc,
                 DateTimeFormatter.ISO_DATE_TIME
             ).year.toString() == searchCriteria.year.toString()
         }
@@ -159,10 +159,10 @@ class LaunchService {
     fun printLaunch(launches: List<Launch>) {
         launches.forEachIndexed { index, launch ->
             println(
-                "${index + 1}. Mission_name: ${launch.mission_name}, " +
-                        "launch_date: ${launch.date_utc}, " +
+                "${index + 1}. Mission_name: ${launch.missionName}, " +
+                        "launch_date: ${launch.dateUtc}, " +
                         "rocket: ${launch.rocket}, " +
-                        "launch_site_name: ${launch.launch_site_name}, " +
+                        "launch_site_name: ${launch.launchSiteName}, " +
                         "id: ${launch.id}"
             )
         }
@@ -173,7 +173,7 @@ class LaunchService {
             "Payload Details for Mission: ${missionName}\n" +
                     "Payload Name: ${payload.name} \n" +
                     "Type: ${payload.type} \n" +
-                    "Mass: ${payload.mass_kg ?: 0} kg \n" +
+                    "Mass: ${payload.massKg ?: 0} kg \n" +
                     "Orbit: ${payload.orbit}"
         )
     }
