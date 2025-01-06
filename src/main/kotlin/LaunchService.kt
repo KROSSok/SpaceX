@@ -1,8 +1,7 @@
 package org.example
 
 import org.joda.time.DateTime
-import retrofit2.Retrofit
-import retrofit2.converter.gson.GsonConverterFactory
+import java.lang.Integer.sum
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 
@@ -13,14 +12,12 @@ class LaunchService {
     private val searchCache = mutableMapOf<Int, List<Launch>>()
     private val payloads = mutableMapOf<String, List<Payload>>()
     private var rockets = mutableListOf<Rocket>()
+    private val apiService = ApiService()
 
-    private val apiService: SpaceXApiService by lazy {
-        Retrofit.Builder().baseUrl("https://api.spacexdata.com/v4/").addConverterFactory(GsonConverterFactory.create())
-            .build().create(SpaceXApiService::class.java)
-    }
+
     // Fetch launches by year
 
-    fun getLaunchesByYear(year: Int): List<Launch> {
+    fun getLaunchesByYear(year: Int): List<Launch>? {
         val searchYear = SearchCriteria(year)
         if (searchCache.containsKey(year)) {
             return searchCache[year]!!
@@ -29,9 +26,14 @@ class LaunchService {
         val call = apiService.getLaunchesByYear(searchYear.year.toString())
         val response = call.execute()
         return if (response.isSuccessful) {
-            val launches = response.body() ?: emptyList()
-            searchCache[year] = launches
-            dateFilter(searchYear)
+            val launches = response.body()
+            if (launches.isNullOrEmpty()) {
+                println("No Launches found for this year")
+                return null
+            } else {
+                searchCache[year] = launches
+                dateFilter(searchYear)
+            }
         } else {
             throw Exception("Failed to fetch data from SpaceX API")
         }
@@ -44,7 +46,7 @@ class LaunchService {
         } else {
             val timestamp = DateTime.now().toString("yyyy-MM-dd HH:mm:ss")
             favorites.add(Favorite(launch, timestamp))
-            println("${launch.mission_name} added to favorites!")
+            println("${launch.missionName} added to favorites!")
         }
     }
 
@@ -54,7 +56,7 @@ class LaunchService {
             println("No favorites found.")
         } else {
             favorites.sortedBy { it.dateAdded }
-                .forEach { println("Mission: ${it.launch.mission_name} - Added on ${it.dateAdded}, id: ${it.launch.id}") }
+                .forEach { println("Mission: ${it.launch.missionName} - Added on ${it.dateAdded}, id: ${it.launch.id}") }
         }
     }
 
@@ -63,7 +65,7 @@ class LaunchService {
         val index = favorites.indexOfFirst { it.launch.id == launchId }
         if (index != -1) {
             val removed = favorites.removeAt(index)
-            println("${removed.launch.mission_name} removed from favorites!")
+            println("${removed.launch.missionName} removed from favorites!")
         } else {
             println("Launch not found in favorites.")
         }
@@ -73,13 +75,15 @@ class LaunchService {
 
         for (entry in searchCache.values) {
 
-            val launch = entry.find { it.mission_name == missionMame }
+            val launch = entry.find { it.missionName.equals(missionMame, ignoreCase = true) }
             if (launch != null) {
                 return launch.id
             }
         }
         // Return null if no matching launch was found
-        println("No Payloads found for this mission")
+        if (searchCache.isEmpty()) {
+            println("No Payloads found for this mission, try to search for launches first")
+        } else println("Mission with $missionMame not found")
         return null
     }
 
@@ -91,9 +95,14 @@ class LaunchService {
         val call = apiService.getPayloadsById(launchId)
         val response = call.execute()
         return if (response.isSuccessful) {
-            val payload = response.body() ?: emptyList()
-            payloads[launchId] = payload  // Cache the payload
-            payloadFilter(launchId)
+            val payload = response.body()
+            if (payload.isNullOrEmpty()) {
+                println("No Payloads found for this mission")
+                return null
+            } else {
+                payloads[launchId] = payload  // Cache the payload
+                payloadFilter(launchId)
+            }
         } else {
             throw Exception("Failed to fetch data from SpaceX API")
         }
@@ -114,18 +123,10 @@ class LaunchService {
 
     private fun dateFilter(searchCriteria: SearchCriteria): List<Launch> {
         return searchCache.getValue(searchCriteria.year).filter {
-            ZonedDateTime.parse(it.date_utc, DateTimeFormatter.ISO_DATE_TIME).year.toString() == searchCriteria.year.toString()
-        }
-    }
-
-    fun getRockets() {
-        val call = apiService.getRocketStatistics()
-        val response = call.execute()
-        return if (response.isSuccessful) {
-            val rocket = response.body() ?: emptyList()
-            rockets = rocket.toMutableList()
-        } else {
-            throw Exception("Failed to fetch data from SpaceX API")
+            ZonedDateTime.parse(
+                it.dateUtc,
+                DateTimeFormatter.ISO_DATE_TIME
+            ).year.toString() == searchCriteria.year.toString()
         }
     }
 
@@ -133,36 +134,35 @@ class LaunchService {
         return rockets.find { it.name == name }
     }
 
-    fun getRocketStats(rocketName: String): RocketStats {
-        var successfulLaunches = 0
-        var totalLaunches = 0
-        var failedLaunches = 0
-        val rocket = getRocketByName(rocketName) ?: throw RocketNotFoundException("Rocket with name '$rocketName' not found.")
-
+    private fun getRocketStats(rocketName: String?): RocketStats {
+        val rocket = rocketName?.let { getRocketByName(it) } ?: throw RocketNotFoundException("Rocket with '$rocketName' not found")
         // Check if searchCache is empty or null
         if (searchCache.isEmpty()) {
             throw CacheDataNotFoundException("No Launches found for rocket '$rocketName', try to search for Launches first")
         }
 
-        // Iterate over cached launches and calculate success rate
-        searchCache.forEach { (_, launches) ->
-            val rocketLaunches = launches.filter { it.rocket == rocket.id }
-            successfulLaunches += rocketLaunches.count { it.success == "true" }
-            failedLaunches += rocketLaunches.count { it.success == "false" }
-            totalLaunches = (successfulLaunches + failedLaunches)
+        val rocketLaunches = searchCache.entries.firstOrNull()?.value?.filter { it.rocket == rocket.id }
+
+        if (rocketLaunches.isNullOrEmpty()){
+            throw CacheDataNotFoundException("No Launches found for rocket '$rocketName'")
         }
-        val successRate: Int = if (totalLaunches == 0) 0 else ((successfulLaunches.toDouble() / totalLaunches) * 100).toInt()
-        return RocketStats(rocket, totalLaunches, successfulLaunches, failedLaunches, successRate)
+        val rocketStats = RocketStats(
+            rocket = rocket,
+            totalLaunches = sum (rocketLaunches.count { it.isSuccessLaunch(it) }, rocketLaunches.count { !it.isSuccessLaunch(it) }),
+            successfulLaunches = rocketLaunches.count { it.isSuccessLaunch(it) },
+            failedLaunches = rocketLaunches.count { !it.isSuccessLaunch(it) }
+        )
+        return rocketStats
     }
 
 
     fun printLaunch(launches: List<Launch>) {
         launches.forEachIndexed { index, launch ->
             println(
-                "${index + 1}. Mission_name: ${launch.mission_name}, " +
-                        "launch_date: ${launch.date_utc}, " +
+                "${index + 1}. Mission_name: ${launch.missionName}, " +
+                        "launch_date: ${launch.dateUtc}, " +
                         "rocket: ${launch.rocket}, " +
-                        "launch_site_name: ${launch.launch_site_name}, " +
+                        "launch_site_name: ${launch.launchSiteName}, " +
                         "id: ${launch.id}"
             )
         }
@@ -173,23 +173,28 @@ class LaunchService {
             "Payload Details for Mission: ${missionName}\n" +
                     "Payload Name: ${payload.name} \n" +
                     "Type: ${payload.type} \n" +
-                    "Mass: ${payload.mass_kg} kg \n" +
+                    "Mass: ${payload.massKg ?: 0} kg \n" +
                     "Orbit: ${payload.orbit}"
         )
     }
 
-    fun printRocketStatistic(rocketStats: RocketStats) {
-        println(
-            "Rocket Statistics for ${rocketStats.rocket.name}\n" +
-                    "Stages: ${rocketStats.rocket.stages}\n" +
-                    "Boosters: ${rocketStats.rocket.boosters}\n" +
-                    "Mass: ${rocketStats.rocket.mass.kg} kg\n" +
-                    "Payload to LEO: ${rocketStats.rocket.payload_weights[0].kg} kg\n" +
-                    "Total Launches: ${rocketStats.totalLaunches}\n" +
-                    "Successful Launches: ${rocketStats.successfulLaunches}\n" +
-                    "Failed Launches: ${rocketStats.failedLaunches}\n" +
-                    "Success Rate: ${rocketStats.successRate} %"
-        )
+    fun findRocketByName(rocketName: String) {
+        rocketName.let { name ->
+            if (rockets.find { it.name == name } == null) {
+                val call = apiService.getRocketStatistics()
+                val response = call.execute()
+                return if (response.isSuccessful) {
+                    val responseData = response.body()?: emptyList()
+                    rockets = responseData.toMutableList()
+                    val rocket = responseData.find { it.name == name }
+                    println(getRocketStats(rocket?.name).toString())
+                } else {
+                    throw Exception("Failed to fetch data from SpaceX API")
+                }
+            } else {
+                println(getRocketStats(rocketName).toString())
+            }
+        }
     }
 }
 
